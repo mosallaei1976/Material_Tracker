@@ -13,7 +13,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '8.0.x' # یا اگر از دات‌نت ۹ استفاده می‌کنی 9.0.x بگذار
+        dotnet-version: '10.0.x' # یا اگر از دات‌نت ۹ استفاده می‌کنی 9.0.x بگذار
 
     - name: Publish .NET App
       run: dotnet publish Material_Tracker/Material_Tracker.csproj -c Release -o release --nologo
