@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>سایت‌پَک | مدیریت مصالح پروژه</title>
+    <meta name="theme-color" content="#232b2a" />
+    <base href="/" />
+    <link rel="preload" id="webassembly" />
+    <link rel="preload" href="fonts/Vazirmatn.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="Material_Tracker.styles.css" rel="stylesheet" />
+    <script type="importmap"></script>
+</head>
+
+<body>
+    <div id="app">
+        <svg class="loading-progress">
+            <circle r="40%" cx="50%" cy="50%" />
+            <circle r="40%" cx="50%" cy="50%" />
+        </svg>
+        <div class="loading-progress-text"></div>
+    </div>
+
+    <div id="blazor-error-ui">
+        خطایی رخ داد. لطفاً صفحه را دوباره بارگذاری کنید.
+        <a href="." class="reload">بارگذاری دوباره</a>
+        <button class="dismiss" aria-label="بستن پیام خطا">×</button>
+    </div>
+    <script src="js/sitepack.js"></script>
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+</body>
+
+</html>
