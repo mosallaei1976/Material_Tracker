@@ -1,8 +1,9 @@
-name: Deploy to GitHub Pages
+name: Deploy Blazor WebAssembly to GitHub Pages
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -11,24 +12,28 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '10.0.x'
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
 
-    - name: Publish .NET App
-      run: dotnet publish -c Release -o release --nologo
+      - name: Publish App
+        run: dotnet publish -c Release -o release --nologo
 
-    - name: Rewrite base href and copy 404
-      run: |
-        REPO_NAME=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
-        sed -i 's/<base href="\/" \/>/<base href="\/'"$REPO_NAME"'\/" \/>/g' release/wwwroot/index.html
-        cp release/wwwroot/index.html release/wwwroot/404.html
+      - name: Fix Base Href for GitHub Pages
+        run: sed -i 's/<base href="\/" \/>/<base href="\/Material_Tracker\/" \/>/g' release/wwwroot/index.html
 
-    - name: Commit wwwroot to GitHub Pages
-      uses: JamesIves/github-pages-deploy-action@v4
-      with:
-        folder: release/wwwroot
-        branch: gh-pages
+      - name: Copy index.html to 404.html
+        run: cp release/wwwroot/index.html release/wwwroot/404.html
+
+      - name: Add .nojekyll
+        run: touch release/wwwroot/.nojekyll
+
+      - name: Deploy to gh-pages branch
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: release/wwwroot
