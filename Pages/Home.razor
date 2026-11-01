@@ -1,7 +1,81 @@
-﻿@page "/"
+@page "/"
+@inherits StateComponent
+@inject IMaterialService Materials
+@inject IJSRuntime JS
 
-<PageTitle>Home</PageTitle>
+<PageTitle>موجودی مصالح | سایت‌پَک</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">نمای کلی کارگاه</p><h1>موجودی مصالح</h1><p>مصالح پروژه را تعریف کنید و موجودی را به‌روز ببینید.</p></div>
+    @if (State.IsInitialized && State.ActiveProjectId is not null) { <button class="button primary" @onclick="NewMaterial">＋ تعریف مصالح</button> }
+</div>
 
-<h1>Hello, world!</h1>
+@if (State.IsInitialized)
+{
+    @if (State.ActiveProjectId is null)
+    {
+        <section class="panel empty-state"><span class="empty-icon" aria-hidden="true">▦</span><h2>از یک پروژه شروع کنید</h2><p>برای دیدن موجودی، پروژه‌ای بسازید یا از بالای صفحه انتخاب کنید.</p><a class="button primary" href="settings">ساخت و مدیریت پروژه</a></section>
+    }
+    else
+    {
+        var allRows = Materials.List();
+        var rows = Materials.List(search, category);
+        <div class="stats-grid">
+            <div class="stat-card"><span>نوع مصالح</span><strong>@PersianText.Number(allRows.Count)</strong><small>در پروژهٔ فعال</small></div>
+            <div class="stat-card"><span>نیازمند بررسی</span><strong class="danger-text">@PersianText.Number(allRows.Count(item => item.IsLow || item.Stock < 0))</strong><small>کمبود یا موجودی منفی</small></div>
+            <div class="stat-card"><span>تراکنش ثبت‌شده</span><strong>@PersianText.Number(State.ActiveTransactions.Count)</strong><a href="transactions">مشاهدهٔ ورود و مصرف ←</a></div>
+        </div>
+        @if (notice is not null) { <p class="alert success-alert" role="status">@notice</p> }
+        @if (error is not null) { <p class="alert error" role="alert">@error</p> }
+        @if (draft is not null) { <MaterialForm @key="draft.Id" Model="draft" IsNew="isNew" OnSaved="Saved" OnCancel="Close" /> }
+        <section class="panel">
+            <div class="section-heading"><h2>فهرست مصالح</h2><span class="muted">@PersianText.Number(rows.Count) مورد</span></div>
+            <div class="filters">
+                <div class="field search-field"><label for="material-search">جست‌وجوی مصالح</label><input id="material-search" type="search" @bind="search" @bind:event="oninput" placeholder="نام مصالح را بنویسید…" /></div>
+                <div class="field"><label for="category-filter">دسته‌بندی</label><select id="category-filter" @bind="category"><option value="">همهٔ دسته‌ها</option>@foreach (var item in allRows.Select(row => row.Material.Category).Distinct().Order()) { <option value="@item">@item</option> }</select></div>
+            </div>
+            @if (allRows.Count == 0)
+            {
+                <div class="empty-state"><h3>هنوز مصالحی تعریف نکرده‌اید</h3><p>اولین مصالح را اضافه کنید؛ سپس ورود و مصرف آن را ثبت کنید.</p><button class="button primary" @onclick="NewMaterial">تعریف اولین مصالح</button></div>
+            }
+            else if (rows.Count == 0) { <div class="empty-state">مصالحی با این جست‌وجو پیدا نشد.</div> }
+            else { <MaterialTable Rows="rows" OnEdit="Edit" OnDelete="Delete" /> }
+        </section>
+    }
+}
 
-Welcome to your new app.
+@code {
+    private Guid? projectId;
+    private string search = string.Empty;
+    private string category = string.Empty;
+    private Material? draft;
+    private bool isNew;
+    private string? error;
+    private string? notice;
+    protected override void OnInitialized() { base.OnInitialized(); projectId = State.ActiveProjectId; }
+    protected override void OnStateChanged()
+    {
+        if (projectId == State.ActiveProjectId) return;
+        projectId = State.ActiveProjectId;
+        draft = null; search = category = string.Empty; notice = error = null;
+    }
+    private void NewMaterial()
+    {
+        draft = new Material { ProjectId = State.ActiveProjectId!.Value };
+        isNew = true; notice = error = null;
+    }
+    private void Edit(Material material) { draft = material; isNew = false; notice = error = null; }
+    private void Close() => draft = null;
+    private void Saved() { draft = null; notice = "مصالح با موفقیت ذخیره شد."; }
+    private async Task Delete(Material material)
+    {
+        error = notice = null;
+        try
+        {
+            if (!await JS.InvokeAsync<bool>("confirm", $"مصالح «{material.Name}» حذف شود؟")) return;
+            await Materials.DeleteAsync(material.Id);
+            if (draft?.Id == material.Id) draft = null;
+            notice = "مصالح حذف شد.";
+        }
+        catch (SitePackDataException exception) { error = exception.Message; }
+        catch (JSException) { error = "نمایش تأیید ممکن نشد. مصالح حذف نشد."; }
+    }
+}

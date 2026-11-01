@@ -1,0 +1,9 @@
+@if (Stock < 0) { <span class="badge danger">موجودی منفی</span> }
+else if (Threshold is decimal threshold && Stock < threshold) { <span class="badge warning">کمبود موجودی</span> }
+else if (Stock == 0) { <span class="badge neutral">بدون موجودی</span> }
+else { <span class="badge success">موجود</span> }
+
+@code {
+    [Parameter] public decimal Stock { get; set; }
+    [Parameter] public decimal? Threshold { get; set; }
+}

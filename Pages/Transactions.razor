@@ -1,0 +1,135 @@
+@page "/transactions"
+@inherits StateComponent
+@inject ITransactionService TransactionsService
+@inject IJSRuntime JS
+
+<PageTitle>ورود و مصرف | سایت‌پَک</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">گردش مصالح پروژه</p><h1>ورود و مصرف</h1><p>هر بار تحویل یا مصرف مصالح را همراه با جزئیات ثبت کنید.</p></div>
+    @if (State.IsInitialized && State.ActiveMaterials.Count > 0)
+    {
+        <div class="actions"><button class="button primary" @onclick="() => New(TransactionType.Inflow)">↓ ثبت ورود</button><button class="button secondary" @onclick="() => New(TransactionType.Outflow)">↑ ثبت مصرف</button></div>
+    }
+</div>
+
+@if (State.IsInitialized)
+{
+    @if (State.ActiveProjectId is null)
+    {
+        <section class="panel empty-state"><h2>ابتدا پروژه را انتخاب کنید</h2><p>تراکنش‌های هر پروژه جداگانه نمایش داده می‌شوند.</p><a class="button primary" href="settings">مدیریت پروژه‌ها</a></section>
+    }
+    else if (State.ActiveMaterials.Count == 0)
+    {
+        <section class="panel empty-state"><h2>ابتدا مصالح را تعریف کنید</h2><p>برای ثبت ورود یا مصرف، حداقل یک نوع مصالح به پروژه اضافه کنید.</p><a class="button primary" href="">تعریف مصالح</a></section>
+    }
+    else
+    {
+        var materials = State.ActiveMaterials;
+        var materialNames = materials.ToDictionary(item => item.Id);
+        var transactions = TransactionsService.List(materialId, type, from, to);
+        @if (notice is not null) { <p class="alert success-alert" role="status">@notice</p> }
+        @if (error is not null) { <p class="alert error" role="alert">@error</p> }
+        @if (draft is not null) { <TransactionForm @key="draft.Id" Model="draft" Materials="materials" IsNew="isNew" OnSaved="Saved" OnCancel="Close" /> }
+        <section class="panel">
+            <div class="section-heading"><h2>تاریخچهٔ تراکنش‌ها</h2><span class="muted">@PersianText.Number(transactions.Count) تراکنش</span></div>
+            <div class="filters">
+                <div class="field"><label for="history-material">مصالح</label><select id="history-material" @bind="materialId"><option value="">همهٔ مصالح</option>@foreach (var item in materials) { <option value="@item.Id">@item.Name</option> }</select></div>
+                <div class="field"><label for="history-type">نوع تراکنش</label><select id="history-type" @bind="type"><option value="">ورود و مصرف</option><option value="@TransactionType.Inflow">ورود</option><option value="@TransactionType.Outflow">مصرف</option></select></div>
+            </div>
+            <details class="date-filters"><summary>فیلتر بازهٔ زمانی</summary><div class="form-grid">
+                <JalaliDateInput Id="history-from" Label="از تاریخ" Optional="true" @bind-Value="fromText" />
+                <JalaliDateInput Id="history-to" Label="تا تاریخ" Optional="true" @bind-Value="toText" />
+            </div><div class="actions"><button class="button secondary" @onclick="ApplyDates">اعمال بازه</button><button class="button subtle" @onclick="ClearDates">پاک کردن بازه</button></div>
+                @if (dateError is not null) { <p class="field-error" role="alert">@dateError</p> }
+            </details>
+            @if (transactions.Count == 0)
+            {
+                <div class="empty-state"><h3>تراکنشی برای نمایش وجود ندارد</h3><p>یک ورود یا مصرف ثبت کنید یا فیلترها را تغییر دهید.</p></div>
+            }
+            else
+            {
+                <p class="table-hint">برای دیدن همهٔ ستون‌ها، جدول را به چپ و راست بکشید.</p>
+                <div class="table-scroll" role="region" aria-label="جدول تراکنش‌ها" tabindex="0"><table>
+                    <thead><tr><th scope="col">تاریخ شمسی</th><th scope="col">مصالح</th><th scope="col">نوع</th><th scope="col">مقدار</th><th scope="col">جزئیات</th><th scope="col">عملیات</th></tr></thead>
+                    <tbody>@foreach (var item in transactions)
+                    {
+                        <tr @key="item.Id">
+                            <td><bdi>@PersianDate.Format(item.Date)</bdi></td>
+                            <td><strong>@materialNames[item.MaterialId].Name</strong></td>
+                            <td><span class="badge @(item.Type == TransactionType.Inflow ? "success" : "neutral")">@(item.Type == TransactionType.Inflow ? "ورود" : "مصرف")</span></td>
+                            <td class="nowrap">@PersianText.Number(item.Quantity) <small>@materialNames[item.MaterialId].Unit</small></td>
+                            <td><details class="transaction-detail"><summary>@(item.Type == TransactionType.Inflow ? item.SellerName ?? "جزئیات تحویل" : item.WorkArea)</summary>
+                                <dl>
+                                    @if (item.Type == TransactionType.Inflow)
+                                    {
+                                        <dt>فروشنده</dt><dd>@(item.SellerName ?? "ثبت نشده")</dd>
+                                        <dt>تلفن فروشنده</dt><dd><bdi>@PersianText.Digits(item.SellerPhone ?? "ثبت نشده")</bdi></dd>
+                                        <dt>راننده</dt><dd>@(item.DriverName ?? "ثبت نشده")</dd>
+                                        <dt>تلفن راننده</dt><dd><bdi>@PersianText.Digits(item.DriverPhone ?? "ثبت نشده")</bdi></dd>
+                                    }
+                                    else { <dt>محل مصرف</dt><dd>@item.WorkArea</dd><dt>شرح مصرف</dt><dd>@(item.Purpose ?? "ثبت نشده")</dd> }
+                                    <dt>شمارهٔ سند</dt><dd>@PersianText.Digits(item.DocumentNumber ?? "ثبت نشده")</dd>
+                                    <dt>یادداشت</dt><dd>@(item.Notes ?? "ثبت نشده")</dd>
+                                </dl>
+                            </details></td>
+                            <td><div class="actions"><button class="button subtle" @onclick="() => Edit(item)">ویرایش</button><button class="button subtle danger-text" disabled="@busy" @onclick="() => Delete(item)">حذف</button></div></td>
+                        </tr>
+                    }</tbody>
+                </table></div>
+            }
+        </section>
+    }
+}
+
+@code {
+    private Guid? projectId;
+    private MaterialTransaction? draft;
+    private bool isNew;
+    private bool busy;
+    private Guid? materialId;
+    private TransactionType? type;
+    private DateOnly? from;
+    private DateOnly? to;
+    private string fromText = string.Empty;
+    private string toText = string.Empty;
+    private string? error;
+    private string? dateError;
+    private string? notice;
+    protected override void OnInitialized() { base.OnInitialized(); projectId = State.ActiveProjectId; }
+    protected override void OnStateChanged()
+    {
+        if (projectId == State.ActiveProjectId) return;
+        projectId = State.ActiveProjectId;
+        draft = null; materialId = null; type = null; error = notice = null; ClearDates();
+    }
+    private void New(TransactionType transactionType) { draft = new MaterialTransaction { Type = transactionType }; isNew = true; error = notice = null; }
+    private void Edit(MaterialTransaction item) { draft = item; isNew = false; error = notice = null; }
+    private void Close() => draft = null;
+    private void Saved() { draft = null; notice = "تراکنش ذخیره شد و موجودی به‌روز شد."; }
+    private void ApplyDates()
+    {
+        dateError = null;
+        try
+        {
+            DateOnly? candidateFrom = string.IsNullOrWhiteSpace(fromText) ? null : PersianDate.Parse(fromText);
+            DateOnly? candidateTo = string.IsNullOrWhiteSpace(toText) ? null : PersianDate.Parse(toText);
+            if (candidateFrom > candidateTo) throw new SitePackDataException("تاریخ شروع نباید بعد از تاریخ پایان باشد.");
+            from = candidateFrom; to = candidateTo;
+        }
+        catch (SitePackDataException exception) { dateError = exception.Message; }
+    }
+    private void ClearDates() { from = to = null; fromText = toText = string.Empty; dateError = null; }
+    private async Task Delete(MaterialTransaction item)
+    {
+        busy = true; error = notice = null;
+        try
+        {
+            if (!await JS.InvokeAsync<bool>("confirm", "این تراکنش حذف شود؟ موجودی مصالح دوباره محاسبه می‌شود.")) return;
+            await TransactionsService.DeleteAsync(item.Id);
+            if (draft?.Id == item.Id) draft = null;
+            notice = "تراکنش حذف شد و موجودی به‌روز شد.";
+        }
+        catch (SitePackDataException exception) { error = exception.Message; }
+        catch (JSException) { error = "نمایش تأیید ممکن نشد. تراکنش حذف نشد."; }
+        finally { busy = false; }
+    }
+}

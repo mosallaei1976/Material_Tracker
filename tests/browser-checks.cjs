@@ -1,0 +1,214 @@
+// Run against a running app: node tests/browser-checks.cjs <absolute-playwright-module-path> [base-url]
+const { chromium } = require(process.argv[2] || 'playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+
+(async () => {
+    const browser = await chromium.launch({ channel: 'msedge', headless: true });
+    let activePage;
+    try {
+        const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'fa-IR', timezoneId: 'Asia/Tehran', acceptDownloads: true });
+        await context.addInitScript(() => {
+            const original = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (key, value) {
+                if (window.__sitepackFailWrites && key === 'sitepack:data:v1') throw new DOMException('Full', 'QuotaExceededError');
+                return original.call(this, key, value);
+            };
+        });
+        const page = await context.newPage();
+        activePage = page;
+        const errors = [];
+        page.on('pageerror', error => { errors.push(error.message); console.error('Browser exception:', error.message); });
+        let confirm = true;
+        page.on('dialog', dialog => confirm ? dialog.accept() : dialog.dismiss());
+        const data = () => page.evaluate(() => JSON.parse(localStorage.getItem('sitepack:data:v1')));
+        const nav = name => page.getByRole('navigation').getByRole('link', { name, exact: true }).click();
+        const status = async text => page.getByRole('status').filter({ hasText: text }).waitFor();
+        const firstProject = 'کارگاه بهار';
+        const artifacts = path.join(__dirname, 'artifacts');
+        await fs.mkdir(artifacts, { recursive: true });
+
+        await page.goto(process.argv[3] || 'http://127.0.0.1:5193');
+        await page.getByRole('heading', { name: 'از یک پروژه شروع کنید' }).waitFor();
+        assert.equal(await page.locator('html').getAttribute('dir'), 'rtl');
+        assert.equal(await page.locator('html').getAttribute('lang'), 'fa');
+        await page.evaluate(() => document.fonts.ready);
+        assert.equal(await page.evaluate(() => document.fonts.check('16px Vazirmatn')), true);
+        console.log('PASS Persian RTL shell and local font');
+
+        await nav('پروژه‌ها و پشتیبان');
+        await page.locator('#project-name').fill(firstProject);
+        await page.getByRole('button', { name: 'ساخت پروژه', exact: true }).click();
+        await status('پروژه ذخیره شد');
+        const projectId = (await data()).ActiveProjectId;
+        await nav('موجودی مصالح');
+        await page.getByRole('button', { name: '＋ تعریف مصالح', exact: true }).click();
+        await page.locator('#material-name').fill('سیمان تیپ دو');
+        await page.locator('#material-category').fill('سازه و بتن');
+        await page.locator('#material-unit').selectOption({ label: 'کیسه' });
+        await page.locator('#material-threshold').fill('۵');
+        await page.getByRole('button', { name: 'ذخیرهٔ مصالح', exact: true }).click();
+        await status('مصالح با موفقیت ذخیره شد');
+        const materialId = (await data()).Materials[0].Id;
+        console.log('PASS Project and material creation using Persian numeric input');
+
+        await nav('ورود و مصرف');
+        await page.getByRole('button', { name: '↓ ثبت ورود', exact: true }).click();
+        await page.locator('#transaction-material').selectOption(materialId);
+        await page.locator('#transaction-quantity').fill('۱۲٫۵');
+        await page.locator('#transaction-date').fill('۱۴۰۳/۱۲/۳۰');
+        await page.locator('#seller-name').fill('تأمین‌کننده نمونه');
+        await page.locator('#seller-phone').fill('09121234567');
+        await page.locator('#driver-phone').fill('+989121234567');
+        assert.equal(await page.locator('#seller-phone').getAttribute('inputmode'), 'numeric');
+        assert.equal(await page.locator('#driver-phone').getAttribute('type'), 'tel');
+        await page.screenshot({ path: path.join(artifacts, 'transaction-desktop.png'), fullPage: true });
+        await page.setViewportSize({ width: 390, height: 844 });
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        await page.screenshot({ path: path.join(artifacts, 'transaction-mobile.png'), fullPage: true });
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.getByRole('button', { name: 'ذخیرهٔ تراکنش', exact: true }).click();
+        await status('تراکنش ذخیره شد');
+        const inflow = (await data()).Transactions[0];
+        assert.equal(inflow.Quantity, 12.5);
+        assert.equal(inflow.Date, '2025-03-20');
+        assert.equal(inflow.SellerPhone, '09121234567');
+        assert.equal(inflow.DriverPhone, '+989121234567');
+        console.log('PASS Inflow, Jalali leap date, decimals, and numeric phone fields');
+
+        await page.getByRole('button', { name: '↑ ثبت مصرف', exact: true }).click();
+        await page.locator('#transaction-material').selectOption(materialId);
+        await page.locator('#transaction-quantity').fill('۱۵');
+        await page.getByRole('button', { name: 'امروز', exact: true }).click();
+        await page.getByRole('button', { name: 'ذخیرهٔ تراکنش', exact: true }).click();
+        await page.getByRole('alert').filter({ hasText: 'محل مصرف' }).waitFor();
+        assert.equal((await data()).Transactions.length, 1);
+        await page.locator('#work-area').fill('طبقهٔ دوم');
+        await page.getByRole('button', { name: 'ذخیرهٔ تراکنش', exact: true }).click();
+        await status('تراکنش ذخیره شد');
+        const localDay = await page.evaluate(() => sitepack.today());
+        assert.equal((await data()).Transactions.find(item => item.Type === 1).Date, localDay);
+        await nav('موجودی مصالح');
+        await page.getByText('موجودی منفی', { exact: true }).waitFor();
+        await page.getByRole('button', { name: 'حذف سیمان تیپ دو', exact: true }).click();
+        await page.getByRole('alert').filter({ hasText: 'دارای تراکنش' }).waitFor();
+        assert.equal((await data()).Materials.length, 1);
+        console.log('PASS Required usage area, local Today, negative stock, and deletion guard');
+
+        await page.locator('#material-search').fill('آجر');
+        await page.getByText('مصالحی با این جست‌وجو پیدا نشد.').waitFor();
+        await page.locator('#material-search').fill('');
+        await page.getByRole('button', { name: 'ویرایش سیمان تیپ دو', exact: true }).click();
+        await page.locator('#material-unit').selectOption({ label: 'تن' });
+        await page.getByRole('button', { name: 'ذخیرهٔ مصالح', exact: true }).click();
+        await page.getByRole('alert').filter({ hasText: 'واحد مصالح دارای تراکنش' }).waitFor();
+        await page.getByRole('button', { name: 'انصراف', exact: true }).click();
+        console.log('PASS Search and unit-change safety');
+
+        await nav('ورود و مصرف');
+        await page.locator('#history-type').selectOption('Outflow');
+        await page.waitForFunction(() => document.querySelectorAll('tbody tr').length === 1);
+        assert.equal(await page.locator('tbody tr').count(), 1);
+        await page.locator('#history-type').selectOption('');
+        await page.getByText('فیلتر بازهٔ زمانی', { exact: true }).click();
+        await page.locator('#history-from').fill('۱۴۰۳/۱۲/۳۰');
+        await page.locator('#history-to').fill('۱۴۰۳/۱۲/۳۰');
+        await page.getByRole('button', { name: 'اعمال بازه', exact: true }).click();
+        await page.waitForFunction(() => document.querySelectorAll('tbody tr').length === 1);
+        assert.equal(await page.locator('tbody tr').count(), 1);
+        await page.getByRole('button', { name: 'پاک کردن بازه', exact: true }).click();
+        const inflowRow = page.locator('tbody tr').filter({ hasText: 'تأمین‌کننده نمونه' });
+        await inflowRow.getByRole('button', { name: 'ویرایش', exact: true }).click();
+        await page.locator('#transaction-quantity').fill('۱۳');
+        confirm = false;
+        await page.getByRole('button', { name: 'ذخیرهٔ تراکنش', exact: true }).click();
+        assert.equal((await data()).Transactions.find(item => item.Id === inflow.Id).Quantity, 12.5);
+        confirm = true;
+        await page.getByRole('button', { name: 'ذخیرهٔ تراکنش', exact: true }).click();
+        await status('تراکنش ذخیره شد');
+        const edited = (await data()).Transactions.find(item => item.Id === inflow.Id);
+        assert.equal(edited.Quantity, 13);
+        assert.equal(edited.CreatedAtUtc, inflow.CreatedAtUtc);
+        console.log('PASS Transaction type/date filters and edit confirmation with stable timestamps');
+
+        await nav('پروژه‌ها و پشتیبان');
+        await page.locator('#project-name').fill('کارگاه دوم');
+        await page.getByRole('button', { name: 'ساخت پروژه', exact: true }).click();
+        await status('پروژه ذخیره شد');
+        await nav('موجودی مصالح');
+        await page.getByRole('heading', { name: 'هنوز مصالحی تعریف نکرده‌اید' }).waitFor();
+        await page.locator('#active-project').selectOption(projectId);
+        await page.getByText('موجودی منفی', { exact: true }).waitFor();
+        await page.reload();
+        await page.getByText('موجودی منفی', { exact: true }).waitFor();
+        assert.equal((await data()).ActiveProjectId, projectId);
+        const secondId = (await data()).Projects.find(item => item.Id !== projectId).Id;
+        await page.evaluate(() => { window.__sitepackFailWrites = true; });
+        await page.locator('#active-project').selectOption(secondId);
+        await page.getByRole('alert').filter({ hasText: 'ذخیرهٔ داده‌ها ممکن نشد' }).waitFor();
+        assert.equal(await page.locator('#active-project').inputValue(), projectId);
+        assert.equal((await data()).ActiveProjectId, projectId);
+        await page.evaluate(() => { window.__sitepackFailWrites = false; });
+        await page.locator('#active-project').selectOption(projectId);
+        await page.getByRole('alert').filter({ hasText: 'ذخیرهٔ داده‌ها ممکن نشد' }).waitFor({ state: 'hidden' });
+        console.log('PASS Failed selection save preserves both the selected project and stored data');
+        await page.screenshot({ path: path.join(artifacts, 'dashboard-desktop.png'), fullPage: true });
+        await page.setViewportSize({ width: 390, height: 844 });
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+        await page.screenshot({ path: path.join(artifacts, 'dashboard-mobile.png'), fullPage: true });
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        console.log('PASS Project isolation, reload persistence, and mobile overflow check');
+
+        await context.setOffline(true);
+        await nav('ورود و مصرف');
+        await page.getByRole('heading', { name: 'تاریخچهٔ تراکنش‌ها' }).waitFor();
+        await page.getByRole('button', { name: '↓ ثبت ورود', exact: true }).click();
+        await page.locator('#transaction-material').selectOption(materialId);
+        await page.locator('#transaction-quantity').fill('۱');
+        await page.getByRole('button', { name: 'ذخیرهٔ تراکنش', exact: true }).click();
+        await status('تراکنش ذخیره شد');
+        assert.equal((await data()).Transactions.length, 3);
+        await context.setOffline(false);
+        console.log('PASS Navigation and transaction persistence during an offline session');
+
+        await nav('پروژه‌ها و پشتیبان');
+        const downloadPromise = page.waitForEvent('download');
+        await page.getByRole('button', { name: 'دریافت فایل پشتیبان', exact: true }).click();
+        const download = await downloadPromise;
+        const backup = await fs.readFile(await download.path(), 'utf8');
+        assert.deepEqual(JSON.parse(backup), await data());
+        confirm = false;
+        const empty = JSON.stringify({ SchemaVersion: 1, Projects: [], Materials: [], Transactions: [], ActiveProjectId: null });
+        await page.locator('#backup-file').setInputFiles({ name: 'empty.json', mimeType: 'application/json', buffer: Buffer.from(empty) });
+        await status('بازیابی لغو شد');
+        assert.equal((await data()).Projects.length, 2);
+        confirm = true;
+        await page.locator('#backup-file').setInputFiles({ name: 'replace.json', mimeType: 'application/json', buffer: Buffer.from(empty) });
+        await status('با موفقیت بازیابی شد');
+        assert.equal((await data()).Projects.length, 0);
+        await page.locator('#backup-file').setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(backup) });
+        await status('با موفقیت بازیابی شد');
+        assert.deepEqual(await data(), JSON.parse(backup));
+        console.log('PASS Downloaded backup, cancelled restore, and confirmed restore');
+
+        await page.evaluate(() => localStorage.setItem('sitepack:data:v1', 'corrupt JSON'));
+        await page.reload();
+        await page.getByRole('heading', { name: 'نسخهٔ پشتیبان اطلاعات' }).waitFor();
+        await page.getByRole('alert').filter({ hasText: 'ساختار JSON' }).waitFor();
+        assert.equal(await page.evaluate(() => localStorage.getItem('sitepack:data:v1')), 'corrupt JSON');
+        await page.locator('#backup-file').setInputFiles({ name: 'recover.json', mimeType: 'application/json', buffer: Buffer.from(backup) });
+        await status('با موفقیت بازیابی شد');
+        assert.deepEqual(await data(), JSON.parse(backup));
+        assert.deepEqual(errors, []);
+        console.log('PASS Corrupt-storage recovery without silent overwrite; no browser exceptions');
+        await context.close();
+    } catch (error) {
+        if (activePage) {
+            await fs.mkdir(path.join(__dirname, 'artifacts'), { recursive: true });
+            await activePage.screenshot({ path: path.join(__dirname, 'artifacts', 'failure.png'), fullPage: true });
+            console.error((await activePage.locator('body').innerText()).slice(0, 3000));
+        }
+        throw error;
+    } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

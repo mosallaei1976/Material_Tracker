@@ -1,0 +1,108 @@
+@page "/settings"
+@inherits StateComponent
+@inject IProjectService Projects
+@inject IJsonBackupService Backup
+@inject IJSRuntime JS
+
+<PageTitle>پروژه‌ها و پشتیبان | سایت‌پَک</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">مدیریت اطلاعات</p><h1>پروژه‌ها و پشتیبان</h1><p>پروژه‌ها را مدیریت کنید و یک نسخهٔ امن از اطلاعات نگه دارید.</p></div></div>
+@if (error is not null) { <p class="alert error" role="alert">@error</p> }
+@if (notice is not null) { <p class="alert success-alert" role="status">@notice</p> }
+
+@if (State.IsInitialized)
+{
+    var snapshot = State.Snapshot;
+    <section class="panel">
+        <div class="section-heading"><h2>پروژه‌های من</h2><span class="muted">@PersianText.Number(snapshot.Projects.Count) پروژه</span></div>
+        <form @onsubmit="SaveProject" @onsubmit:preventDefault novalidate>
+            <fieldset class="inline-form" disabled="@busy">
+                <div class="field"><label for="project-name">@(editingId is null ? "نام پروژهٔ جدید" : "نام جدید پروژه")</label><input id="project-name" @bind="projectName" maxlength="160" placeholder="مانند بازسازی خانهٔ بهار" /></div>
+                <button type="submit" class="button primary">@(editingId is null ? "ساخت پروژه" : "ذخیرهٔ نام")</button>
+                @if (editingId is not null) { <button type="button" class="button secondary" @onclick="CancelEdit">انصراف</button> }
+            </fieldset>
+        </form>
+        @if (snapshot.Projects.Count == 0) { <p class="empty-state">هنوز پروژه‌ای ندارید. اولین پروژه را بسازید تا ثبت مصالح را شروع کنید.</p> }
+        else
+        {
+            <div class="project-list">@foreach (var project in Projects.List())
+            {
+                var count = snapshot.Materials.Count(item => item.ProjectId == project.Id);
+                var active = project.Id == snapshot.ActiveProjectId;
+                <article class="project-card" @key="project.Id">
+                    <div><h3>@project.Name @if (active) { <span class="badge success">فعال</span> }</h3><small>@PersianText.Number(count) نوع مصالح · ساخته‌شده در <bdi>@PersianDate.Format(DateOnly.FromDateTime(project.CreatedAtUtc.ToLocalTime()))</bdi></small></div>
+                    <div class="actions">
+                        @if (!active) { <button class="button secondary" disabled="@busy" @onclick="() => Select(project.Id)">انتخاب</button> }
+                        <button class="button subtle" disabled="@busy" @onclick="() => Edit(project)">تغییر نام</button>
+                        <button class="button subtle danger-text" disabled="@(busy || active || count > 0)" title="@(active || count > 0 ? "فقط پروژهٔ غیرفعال و بدون مصالح قابل حذف است" : "حذف پروژه")" @onclick="() => Delete(project)">حذف</button>
+                    </div>
+                </article>
+            }</div>
+            <p class="hint">برای حفظ سوابق، پروژهٔ فعال یا دارای مصالح قابل حذف نیست.</p>
+        }
+    </section>
+}
+
+<section class="panel">
+    <h2>نسخهٔ پشتیبان اطلاعات</h2>
+    <p class="muted">پاک شدن اطلاعات مرورگر، داده‌های شما را هم پاک می‌کند. فایل پشتیبان را در جای امن نگه دارید.</p>
+    <div class="backup-grid">
+        <div class="backup-card"><h3>دریافت نسخهٔ پشتیبان</h3><p>همهٔ پروژه‌ها، مصالح و تراکنش‌ها در یک فایل ذخیره می‌شوند.</p><button class="button primary" disabled="@(busy || !State.IsInitialized)" @onclick="Export">دریافت فایل پشتیبان</button></div>
+        <div class="backup-card"><h3>بازیابی اطلاعات</h3><p>فایل پشتیبان را انتخاب کنید. پس از تأیید شما، همهٔ اطلاعات فعلی جایگزین می‌شوند.</p>
+            <label for="backup-file" class="button secondary file-picker">انتخاب فایل پشتیبان<InputFile id="backup-file" class="visually-hidden" accept=".json,application/json" OnChange="Restore" disabled="@busy" /></label>
+            <small>فقط فایل پشتیبان سایت‌پَک، حداکثر ۱۰ مگابایت</small>
+        </div>
+    </div>
+    @if (busy) { <p role="status">در حال انجام عملیات…</p> }
+</section>
+
+@code {
+    private bool busy;
+    private Guid? editingId;
+    private string projectName = string.Empty;
+    private string? error;
+    private string? notice;
+    protected override void OnStateChanged()
+    {
+        if (editingId is Guid id && !State.Snapshot.Projects.Any(item => item.Id == id)) CancelEdit();
+    }
+    private void Edit(Project project) { editingId = project.Id; projectName = project.Name; error = notice = null; }
+    private void CancelEdit() { editingId = null; projectName = string.Empty; }
+    private async Task SaveProject() => await Run(async () =>
+    {
+        if (editingId is Guid id) await Projects.RenameAsync(id, projectName);
+        else await Projects.CreateAsync(projectName);
+        CancelEdit(); notice = "پروژه ذخیره شد.";
+    });
+    private async Task Select(Guid id) => await Run(async () => { await Projects.SelectAsync(id); notice = "پروژهٔ فعال تغییر کرد."; });
+    private async Task Delete(Project project) => await Run(async () =>
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"پروژهٔ «{project.Name}» حذف شود؟")) return;
+        await Projects.DeleteAsync(project.Id);
+        if (editingId == project.Id) CancelEdit();
+        notice = "پروژه حذف شد.";
+    });
+    private async Task Export() => await Run(async () =>
+    {
+        await JS.InvokeVoidAsync("sitepack.download", "sitepack-backup.json", await Backup.ExportJsonAsync());
+        notice = "فایل پشتیبان برای دریافت آماده شد.";
+    });
+    private async Task Restore(InputFileChangeEventArgs args) => await Run(async () =>
+    {
+        const long maxSize = 10 * 1024 * 1024;
+        if (args.File.Size > maxSize) throw new SitePackDataException("حجم فایل پشتیبان نباید بیشتر از ۱۰ مگابایت باشد.");
+        using var reader = new StreamReader(args.File.OpenReadStream(maxSize));
+        var json = await reader.ReadToEndAsync();
+        var restored = await Backup.RestoreJsonAsync(json);
+        if (restored) CancelEdit();
+        notice = restored ? "اطلاعات نسخهٔ پشتیبان با موفقیت بازیابی شد." : "بازیابی لغو شد. اطلاعات فعلی حفظ شد.";
+    });
+    private async Task Run(Func<Task> action)
+    {
+        busy = true; error = notice = null;
+        try { await action(); }
+        catch (SitePackDataException exception) { error = exception.Message; }
+        catch (JSException) { error = "عملیات مرورگر انجام نشد. دوباره تلاش کنید."; }
+        catch (IOException) { error = "خواندن فایل ممکن نشد. فایل را دوباره انتخاب کنید."; }
+        finally { busy = false; }
+    }
+}

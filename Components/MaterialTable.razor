@@ -1,0 +1,28 @@
+<p class="table-hint">برای دیدن همهٔ ستون‌ها، جدول را به چپ و راست بکشید.</p>
+<div class="table-scroll" role="region" aria-label="جدول موجودی مصالح" tabindex="0">
+    <table>
+        <thead><tr><th scope="col">مصالح</th><th scope="col">دسته‌بندی</th><th scope="col">موجودی فعلی</th><th scope="col">حد هشدار</th><th scope="col">وضعیت</th><th scope="col">عملیات</th></tr></thead>
+        <tbody>
+            @foreach (var row in Rows)
+            {
+                <tr @key="row.Material.Id">
+                    <td><strong>@row.Material.Name</strong></td>
+                    <td>@row.Material.Category</td>
+                    <td><span class="quantity">@PersianText.Number(row.Stock)</span> <small>@row.Material.Unit</small></td>
+                    <td>@(row.Material.MinStockWarning is decimal threshold ? PersianText.Number(threshold) : "تعیین نشده")</td>
+                    <td><StockStatusBadge Stock="row.Stock" Threshold="row.Material.MinStockWarning" /></td>
+                    <td><div class="actions">
+                        <button class="button subtle" @onclick="() => OnEdit.InvokeAsync(row.Material)" aria-label="@($"ویرایش {row.Material.Name}")">ویرایش</button>
+                        <button class="button subtle danger-text" @onclick="() => OnDelete.InvokeAsync(row.Material)" aria-label="@($"حذف {row.Material.Name}")">حذف</button>
+                    </div></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<MaterialStock> Rows { get; set; } = [];
+    [Parameter] public EventCallback<Material> OnEdit { get; set; }
+    [Parameter] public EventCallback<Material> OnDelete { get; set; }
+}

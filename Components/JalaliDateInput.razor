@@ -1,0 +1,38 @@
+@inject IJSRuntime JS
+
+<div class="field">
+    <label for="@Id">@Label</label>
+    <div class="date-control">
+        <input id="@Id" type="text" inputmode="numeric" dir="ltr" value="@Value" @oninput="Changed"
+               placeholder="سال/ماه/روز" aria-describedby="@(Id + "-hint")" />
+        <button type="button" class="button secondary" @onclick="Today">امروز</button>
+    </div>
+    <small id="@(Id + "-hint")">شمسی؛ مانند ۱۴۰۵/۰۸/۱۱ @if (Optional) { <span>· اختیاری</span> }</small>
+    @if (error is not null) { <span class="field-error" role="alert">@error</span> }
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "jalali-date";
+    [Parameter] public string Label { get; set; } = "تاریخ";
+    [Parameter] public string Value { get; set; } = string.Empty;
+    [Parameter] public bool Optional { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    private string? error;
+    private async Task Changed(ChangeEventArgs args)
+    {
+        error = null;
+        var text = PersianText.LatinDigits(args.Value?.ToString() ?? string.Empty);
+        if (text.Length == 8 && text.All(char.IsAsciiDigit)) text = text.Insert(6, "/").Insert(4, "/");
+        await ValueChanged.InvokeAsync(PersianText.Digits(text));
+    }
+    private async Task Today()
+    {
+        try
+        {
+            var today = await JS.InvokeAsync<string>("sitepack.today");
+            error = null;
+            await ValueChanged.InvokeAsync(PersianDate.Format(DateOnly.ParseExact(today, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)));
+        }
+        catch (JSException) { error = "دریافت تاریخ امروز ممکن نشد. تاریخ را دستی وارد کنید."; }
+    }
+}

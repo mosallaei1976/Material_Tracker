@@ -1,0 +1,41 @@
+@inject IMaterialService Materials
+
+<section class="panel form-panel" aria-labelledby="material-form-title">
+    <h2 id="material-form-title">@(IsNew ? "تعریف مصالح جدید" : "ویرایش مصالح")</h2>
+    <form @onsubmit="Save" @onsubmit:preventDefault novalidate>
+        <fieldset disabled="@busy">
+            <div class="form-grid">
+                <div class="field"><label for="material-name">نام مصالح <span class="required">الزامی</span></label><input id="material-name" @bind="Model.Name" maxlength="160" /></div>
+                <div class="field"><label for="material-category">دسته‌بندی <span class="required">الزامی</span></label><input id="material-category" @bind="Model.Category" list="categories" maxlength="100" /><datalist id="categories"><option value="سازه و بتن" /><option value="تأسیسات مکانیکی" /><option value="نازک‌کاری" /><option value="برق" /></datalist></div>
+                <div class="field"><label for="material-unit">واحد اندازه‌گیری</label><select id="material-unit" @bind="Model.Unit"><option value="">انتخاب واحد</option>@foreach (var unit in DataValidator.Units) { <option value="@unit">@unit</option> }</select></div>
+                <div class="field"><label for="material-threshold">حد هشدار موجودی</label><input id="material-threshold" type="text" inputmode="decimal" dir="ltr" @bind="threshold" /><small>اختیاری؛ بر اساس واحد انتخاب‌شده</small></div>
+            </div>
+            @if (error is not null) { <p class="alert error" role="alert">@error</p> }
+            <div class="actions"><button type="submit" class="button primary">@(busy ? "در حال ذخیره…" : "ذخیرهٔ مصالح")</button><button type="button" class="button secondary" @onclick="() => OnCancel.InvokeAsync()">انصراف</button></div>
+        </fieldset>
+    </form>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public Material Model { get; set; } = new();
+    [Parameter] public bool IsNew { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    private bool busy;
+    private string threshold = string.Empty;
+    private string? error;
+    protected override void OnInitialized() => threshold = Model.MinStockWarning is decimal value ? PersianText.Number(value) : string.Empty;
+    private async Task Save()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            Model.MinStockWarning = string.IsNullOrWhiteSpace(threshold) ? null : PersianText.ParseDecimal(threshold, "حد هشدار");
+            await Materials.SaveAsync(Model, IsNew);
+            await OnSaved.InvokeAsync();
+        }
+        catch (SitePackDataException exception) { error = exception.Message; }
+        finally { busy = false; }
+    }
+}

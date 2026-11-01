@@ -1,16 +1,51 @@
-﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject AppState State
+
+<div class="app-shell" dir="rtl">
+    <a class="skip-link" href="#main-content">رفتن به محتوای اصلی</a>
+    <aside class="sidebar">
+        <a href="" class="brand" aria-label="سایت‌پَک، صفحهٔ اصلی">
+            <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="m16 3 12 7v13l-12 7-12-7V10L16 3Z M4 10l12 7 12-7M16 17v13M10 6l12 7" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg></span>
+            <span><strong>سایت‌پَک</strong><small>مدیریت مصالح پروژه</small></span>
+        </a>
         <NavMenu />
+        <div class="sidebar-note"><strong>کارگاه منظم، خیال آسوده</strong><p>ورود، مصرف و موجودی مصالح؛ همه در یک جا.</p></div>
+    </aside>
+    <div class="workspace">
+        <header class="topbar"><ProjectSelector /><a class="button secondary" href="settings">مدیریت پروژه‌ها</a></header>
+        <main id="main-content" tabindex="-1">
+            @if (!attempted)
+            {
+                <div class="empty-state" role="status">در حال آماده‌سازی اطلاعات…</div>
+            }
+            else
+            {
+                @if (!State.IsInitialized)
+                {
+                    <div class="alert error" role="alert"><p>@State.LastError</p><div class="actions"><button class="button secondary" @onclick="Initialize">تلاش دوباره</button><a class="button secondary" href="settings">بازیابی نسخهٔ پشتیبان</a></div></div>
+                }
+                @Body
+            }
+        </main>
+        <footer>سایت‌پَک · داده‌ها در همین مرورگر ذخیره می‌شوند. از اطلاعات خود نسخهٔ پشتیبان بگیرید.</footer>
     </div>
-
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
 </div>
+
+@code {
+    private bool attempted;
+    private bool disposed;
+    protected override void OnInitialized() => State.Changed += Changed;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Initialize();
+    }
+    private async Task Initialize()
+    {
+        try { await State.InitializeAsync(); }
+        catch (SitePackDataException) { /* LastError is displayed without replacing corrupt data. */ }
+        finally { attempted = true; await InvokeAsync(StateHasChanged); }
+    }
+    private void Changed() { if (!disposed) _ = InvokeAsync(StateHasChanged); }
+    public void Dispose() { disposed = true; State.Changed -= Changed; }
+}

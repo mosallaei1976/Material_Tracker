@@ -1,0 +1,28 @@
+@inherits StateComponent
+@inject IProjectService Projects
+
+<div class="project-selector">
+    <label for="active-project">پروژهٔ فعال</label>
+    <select @key="version" id="active-project" value="@State.ActiveProjectId" @onchange="Select" disabled="@(!State.IsInitialized || busy)">
+        <option value="">انتخاب پروژه</option>
+        @foreach (var project in Projects.List())
+        {
+            <option value="@project.Id">@project.Name</option>
+        }
+    </select>
+    @if (error is not null) { <span class="field-error" role="alert">@error</span> }
+</div>
+
+@code {
+    private bool busy;
+    private string? error;
+    private int version;
+    private async Task Select(ChangeEventArgs args)
+    {
+        busy = true;
+        error = null;
+        try { await Projects.SelectAsync(Guid.TryParse(args.Value?.ToString(), out var id) ? id : null); }
+        catch (SitePackDataException exception) { error = exception.Message; version++; }
+        finally { busy = false; }
+    }
+}
