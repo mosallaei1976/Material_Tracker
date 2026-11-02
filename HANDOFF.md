@@ -13,10 +13,10 @@ client-side Blazor WebAssembly targeting `net10.0`, with namespace
 before creating or changing it, complete the authorized phase, and obtain the
 user's approval before proceeding into another implementation phase.
 
-The user approved the core models and persistence layer and authorized the UI
-phase: project selection, material management, Persian transaction forms, and pages.
-That UI phase is implemented and ready for review. See `UI_REVIEW.md` for the full
-file index, verification, and screenshots. CSV export and PWA caching remain later work.
+The core models, persistence layer, and UI are implemented. The user also authorized
+and received the PWA upgrade: manifest, icons, service-worker caching, and offline
+startup verification. See `UI_REVIEW.md` for the UI file index and screenshots.
+CSV export remains future work. Continue within the user's authorized task scope.
 
 ## Current handoff status
 
@@ -25,15 +25,18 @@ file index, verification, and screenshots. CSV export and PWA caching remain lat
 | Core models and localStorage persistence | Implemented and approved by the user. |
 | Date utilities and business services | Implemented to support the UI; ownership, history, and unit protections covered by checks. |
 | Persian RTL UI | Implemented and reported to the user; awaiting explicit review/approval. |
+| Installable PWA and offline startup | Implemented; published offline startup verified at `/` and `/Material_Tracker/`. Native installation on physical devices remains untested. |
 | Build | Last implementation build passed with zero warnings and zero errors. |
 | Console checks | 50/50 passed, including the original 42 storage checks and eight added utility/service checks. |
-| Browser checks | All 11 workflow groups passed in headless Edge; no browser exceptions. |
+| Browser checks | Earlier UI verification passed 11 workflow groups. New PWA checks passed at both base paths in headless Edge with no browser exceptions. |
 | Review artifacts | Desktop/mobile dashboard and transaction-form screenshots exist locally. |
 | Development server | Stopped after verification; start it again for review. |
-| Current request | Update this handoff only; no new implementation phase was started. |
+| Current request | Update this handoff to record the completed PWA upgrade and verification. |
 
-This handoff update changes documentation only. Verification results above are
-from the completed UI implementation; builds and tests were not rerun for this update.
+This handoff update changes documentation only. Build, publish, storage, and PWA
+verification results are from the completed PWA upgrade on November 2, 2026;
+the 11-group UI browser results are from the earlier UI implementation. Tests
+were not rerun for this documentation update.
 
 ## Resume and run
 
@@ -61,6 +64,17 @@ application dependency. If unavailable, use the setup command in `UI_REVIEW.md`.
 The script requires installed Microsoft Edge and uses an isolated browser context.
 Restart the development server after rebuilding so its static-asset mappings match
 the new build; stale mappings caused a startup timeout during an earlier check.
+
+For published PWA checks, no separate development server is needed:
+
+```powershell
+dotnet publish -c Release -o tests/artifacts/pwa-publish --nologo
+node tests/pwa-checks.cjs "$env:TEMP\sitepack-browser-checks\node_modules\playwright"
+```
+
+The PWA script starts and closes its own local static server and isolated browser
+contexts. It serves the published output at `/` and `/Material_Tracker/`, emulating
+the GitHub Pages base-href rewrite. Generated publish output is ignored by Git.
 
 ## Review artifacts
 
@@ -104,10 +118,42 @@ viewport; screenshots were inspected and page-level horizontal overflow was chec
 | `wwwroot/fonts/` | Bundled Vazirmatn variable font and its OFL license. |
 | `wwwroot/js/sitepack.js` | Browser-local today value and JSON download helper. |
 | `tests/browser-checks.cjs` | Real-browser workflows in headless Edge; screenshots go to ignored `tests/artifacts/`. |
+| `wwwroot/manifest.webmanifest` | Persian RTL standalone manifest, relative start URL/scope, and blue theme. |
+| `wwwroot/icon-192.png`, `wwwroot/icon-512.png` | Actual PNG box icons at the manifest sizes, with room for maskable cropping. |
+| `wwwroot/service-worker.js` | Versioned static precaching, scoped cache cleanup, `clients.claim()`, and cached app-shell navigation. |
+| `tests/pwa-checks.cjs` | Published PWA checks for both base paths, offline deep-route reload, font loading, and persisted online/offline writes. |
 
 `Program.cs` registers storage, state, backup, project, material, and transaction
 services as scoped services. `Material_Tracker.csproj` excludes the console checks from the
 Blazor compilation/content. No additional NuGet packages were introduced.
+
+## PWA behavior and deployment
+
+- `Material_Tracker.csproj` enables the SDK-generated `service-worker-assets.js`
+  manifest and uses the same worker source for build and publish. The asset list
+  includes the Blazor runtime so offline startup does not depend on previously
+  visiting every page or downloading runtime files on demand.
+- `wwwroot/index.html` links the manifest and Apple touch icon, sets theme color
+  to `#0284c7`, and registers the worker after `Blazor.start()` resolves. Worker
+  URLs and scope are resolved against `document.baseURI`; asset paths are relative.
+- Preserve the SDK's `_framework/blazor.webassembly#[.{fingerprint}].js` path
+  syntax in source HTML so fingerprint substitution continues to work.
+- Caches are named by application base path and generated asset version. Install
+  precaches the asset list; activation removes older caches for that base path
+  and claims clients. Updates wait for existing app tabs to close; there is no
+  forced `skipWaiting()` that could mix running application versions.
+- Fetch handling serves same-origin, in-scope navigations from cached
+  `index.html` and known static assets from the active cache. Other requests
+  pass through. The worker does not modify localStorage or user backup data.
+- `.github/workflows/deploy.yml` already rewrites the published base href to
+  `/Material_Tracker/` and copies the result to `404.html`. The worker excludes
+  `404.html` and its own scripts from precaching. It omits integrity validation
+  for `index.html` because that deployment rewrite changes the generated hash;
+  other precached assets retain SDK integrity hashes.
+- Offline startup requires an initial successful online worker installation.
+  Use HTTPS for deployment or localhost for development. Physical-device install
+  flows, Apple home-screen behavior, and multi-version update transitions still
+  need manual verification.
 
 ## Data and state contract
 
@@ -126,7 +172,7 @@ Blazor compilation/content. No additional NuGet packages were introduced.
 
 ## Verification already completed
 
-The UI implementation and underlying services were verified:
+The PWA upgrade was verified with these results:
 
 ```powershell
 dotnet build
@@ -134,6 +180,13 @@ dotnet build
 
 dotnet run --project tests/SitePack.StorageChecks/SitePack.StorageChecks.csproj
 # 50/50 checks passed.
+
+dotnet publish -c Release -o tests/artifacts/pwa-publish --nologo
+# Publish succeeded.
+
+node tests/pwa-checks.cjs "$env:TEMP\sitepack-browser-checks\node_modules\playwright"
+# PASS / and /Material_Tracker/: manifest, PNG sizes, worker scope,
+# offline deep-route startup, bundled font, persistence, and offline writes.
 ```
 
 Checks cover initialization, reload/backup round trips, phone/date/decimal
@@ -141,17 +194,21 @@ preservation, project isolation, concurrent updates, detached state, failed
 reads/writes, corrupt-data recovery, confirmation/cancellation, deletion guards,
 and invalid backup rejection, plus Jalali leap dates, Persian decimal parsing,
 business-service ownership rules, stock changes, and stable timestamps.
-The separate browser script passed 11 workflow groups in headless Edge, including
+During the earlier UI verification, `tests/browser-checks.cjs` passed 11 workflow
+groups in headless Edge, including
 mobile overflow, offline in-session writes, transaction edits/filters, failed-write
 selector recovery, backup download/restore, and recovery from corrupt localStorage.
 Desktop/mobile dashboard and transaction-form screenshots were visually inspected.
+The new PWA checks use separate browser contexts for each base path, preserve
+online-created records across offline reloads, create another project offline,
+and confirm that both projects survive a second offline reload. These checks
+cover published browser behavior; they do not automate native app installation.
 
 ## Remaining work and recommended sequence
 
-1. Review the implemented UI with the user before starting another phase. The initial date utilities and business services are now implemented to support the UI.
-2. Complete the broader export/import responsibility from SPEC. JSON service logic and file controls exist; the full `IExportImportService` and CSV exports are not implemented. CSV needs UTF-8, Jalali dates, proper escaping, and spreadsheet formula protection.
-3. Add PWA manifest/assets/service-worker caching and verify installed/offline startup after initial load. The current browser check verifies an already-loaded offline session, not offline startup.
-4. Optionally expand cross-browser, accessibility, and mobile-device verification after review. Current browser coverage uses headless Edge, not physical phone keyboards or native dialogs on every platform.
+1. Complete the broader export/import responsibility from SPEC when requested. JSON service logic and file controls exist; the full `IExportImportService` and CSV exports are not implemented. CSV needs UTF-8, Jalali dates, proper escaping, and spreadsheet formula protection.
+2. Verify native installation on physical Android/iOS devices and desktop, plus update activation after deploying a new asset version. Published offline startup already passes at both base paths.
+3. Expand cross-browser, accessibility, and mobile-device verification as needed. Current browser coverage uses headless Edge, not physical phone keyboards or native dialogs on every platform.
 
 Build after each code step and resolve warnings/errors before reporting completion.
 
@@ -162,7 +219,7 @@ Build after each code step and resolve warnings/errors before reporting completi
 - Settings provides JSON download/upload, a 10 MiB upload limit, validation, and confirmation before replacement. CSV controls are not implemented.
 - LocalStorage is quota-limited and browser-local; clearing it removes data. User-managed backups remain necessary.
 - State synchronization is limited to one tab. Other tabs are not refreshed automatically, and concurrent tab writes can overwrite each other.
-- Persistence requires no network for data operations, but PWA asset caching and offline application startup are not implemented yet.
+- Persistence requires no network for data operations. PWA static caching supports offline startup after successful initial installation; it does not provide cloud backup or cross-device synchronization.
 - Future UI mutations should use the scoped business services; preserve their ownership, history, and confirmation rules.
 - Preserve existing user changes and staged files. No commit or deployment was created during this work.
 - The repository already contained staged files before the UI work. Do not treat the working tree as clean or stage/reset unrelated files when continuing.

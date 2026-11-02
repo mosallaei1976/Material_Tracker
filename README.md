@@ -19,6 +19,7 @@ offline startup are implemented. CSV export remains planned work.
 - Bundled Vazirmatn font, responsive layouts, and large touch targets.
 - Versioned JSON backup download and validated restore with confirmation.
 - Protection against deleting materials with history or active/populated projects.
+- Installable PWA with Persian app metadata, blue box icons, and offline startup after initial caching.
 
 ## Requirements
 
@@ -77,20 +78,40 @@ does not synchronize between browsers, devices, or open tabs. Different origins,
 including different local ports, have separate storage. Use JSON backups to move
 data or recover it.
 
-After the first successful load and service-worker installation, the app can
-start offline, including on its page routes. Install it using the browser's install
-action (or Add to Home Screen). Deployment requires HTTPS; localhost also works.
-The manifest and worker use the configured base path, including `/Material_Tracker/`
-on GitHub Pages. Static caches are versioned per deployment and base path; updates
-activate after existing app tabs close. Records remain in localStorage independently
-of those caches. Clearing site data still removes records.
+## Install and use offline
 
-To verify published PWA behavior in headless Edge at both `/` and `/Material_Tracker/`:
+1. Open SitePack online over HTTPS (or localhost for development) and allow the initial app load and service-worker installation to finish.
+2. Use your browser's install action or **Add to Home Screen**, where supported.
+3. Reopen the app offline to manage projects, materials, and transactions. Page reloads and direct page routes also work after caching completes.
+
+The worker caches the app shell, Blazor runtime, styles, icons, and bundled font.
+Records remain in localStorage independently of the static cache. New app versions
+wait for existing SitePack tabs and app windows to close before activating; reopen
+the app to use the installed update. Continue keeping JSON backups: clearing site
+data removes local records as well as cached assets.
+
+Published offline startup has been checked in headless Edge. Native installation
+on physical devices, Apple home-screen behavior, and update transitions still need
+manual verification.
+
+## Publish and GitHub Pages
+
+The app is static and requires no backend. Publish it with:
 
 ```powershell
-dotnet publish -c Release -o tests/artifacts/pwa-publish
-node tests/pwa-checks.cjs <absolute-playwright-module-path>
+dotnet publish -c Release -o tests/artifacts/pwa-publish --nologo
 ```
+
+Serve the generated `wwwroot` directory over HTTPS, including the generated
+`service-worker-assets.js`. Configure the published `<base href>` for the hosting
+path and serve `index.html` as the fallback for app routes.
+
+The existing [deployment workflow](.github/workflows/deploy.yml) runs on pushes to
+`main` or manual dispatch. It publishes the app, sets the base href to
+`/Material_Tracker/`, copies `index.html` to `404.html` for page routing, adds
+`.nojekyll`, and deploys to the `gh-pages` branch. Configure GitHub Pages to serve
+that branch from its root. Manifest and worker paths resolve against the app base;
+static caches are versioned separately for each base path.
 
 ## Verification
 
@@ -99,14 +120,29 @@ dotnet build
 dotnet run --project tests/SitePack.StorageChecks/SitePack.StorageChecks.csproj
 ```
 
-The last UI implementation verification passed with **zero build warnings/errors**
-and **50/50 console checks**. Checks cover persistence, validation, recovery,
+The PWA upgrade verification on **November 2, 2026** passed with **zero build
+warnings/errors**, a successful Release publish, and **50/50 console checks**.
+Checks cover persistence, validation, recovery,
 project isolation, state updates, Jalali dates, Persian decimal parsing, and
 business-service rules. The console harness uses production source files and
 simulates browser interop without additional test packages.
 
-The optional `tests/browser-checks.cjs` script passed **11 workflow groups** in
-headless Edge, covering the UI, mobile overflow, offline in-session writes,
+For the optional browser checks, install Playwright outside the app dependencies
+and use an installed Microsoft Edge browser:
+
+```powershell
+npm.cmd install --prefix "$env:TEMP\sitepack-browser-checks" --no-save --package-lock=false --registry=https://registry.npmjs.org playwright
+dotnet publish -c Release -o tests/artifacts/pwa-publish --nologo
+node tests/pwa-checks.cjs "$env:TEMP\sitepack-browser-checks\node_modules\playwright"
+```
+
+`tests/pwa-checks.cjs` passed at both `/` and `/Material_Tracker/`, covering manifest
+metadata, PNG dimensions, worker scope, offline deep-route startup, the local font,
+preserved records, and offline writes across reloads. It starts and closes its own
+static server and isolated browser contexts; no separate server is needed.
+
+During the earlier UI verification, `tests/browser-checks.cjs` passed **11 workflow
+groups** in headless Edge, covering the UI, mobile overflow, offline in-session writes,
 backup/restore, and failed storage operations. See [UI_REVIEW.md](UI_REVIEW.md) for
 tooling setup and commands. Screenshots are generated in `tests/artifacts/`, which
 is ignored by Git and may be absent from a fresh checkout.
@@ -120,8 +156,8 @@ Models/       Projects, materials, transactions, and the versioned data document
 Pages/        Dashboard, transactions, settings, and missing-page UI
 Services/     Storage, shared state, business logic, validation, and JSON backups
 Utilities/    Persian calendar conversion and number formatting/parsing
-wwwroot/      Styles, bundled font/license, and small browser helpers
-tests/        Console verification and browser workflows
+wwwroot/      App shell, styles, bundled font, browser helpers, PWA manifest/icons/worker
+tests/        Console verification, UI workflows, and published PWA checks
 ```
 
 `Models/MaterialEntry.cs` contains the SPEC-named `MaterialTransaction` class.
@@ -143,6 +179,7 @@ persistence, and run `dotnet build` after code changes.
 ## Remaining work
 
 - CSV exports with Jalali dates, correct escaping, and spreadsheet formula protection.
+- Native installation on desktop and physical Android/iOS devices, plus update activation after a new deployment.
 - Broader browser, accessibility, and physical mobile-device testing.
 
 The bundled Vazirmatn font is accompanied by its [OFL license](wwwroot/fonts/OFL.txt).
