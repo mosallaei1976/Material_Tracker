@@ -1,4 +1,4 @@
-/* Manifest version: YIPIKSy4 */
+/* Manifest version: KvX2vgST */
 // The SDK generates a versioned list containing the complete Blazor runtime.
 importScripts('./service-worker-assets.js');
 
