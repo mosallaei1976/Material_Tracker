@@ -5,9 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>سایت‌پَک | مدیریت مصالح پروژه</title>
-    <meta name="theme-color" content="#232b2a" />
+    <meta name="theme-color" content="#0284c7" />
     <base href="/Material_Tracker/" />
-    <link href="_framework/dotnet.xecf7ul9cw.js" rel="preload" as="script" fetchpriority="high" crossorigin="anonymous" integrity="sha256-mRv2iN58+XERAjA2aQ/f0DVd/7SCTf4PAOs9inQt78M=" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png" />
+    <link href="_framework/dotnet.awe3efxh5f.js" rel="preload" as="script" fetchpriority="high" crossorigin="anonymous" integrity="sha256-1tcy4M73MJGF4jglA1R26y3Fir6yFlA/PXv2A8K7ROg=" />
     <link rel="preload" href="fonts/Vazirmatn.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -15,20 +17,20 @@
     <script type="importmap">{
   "imports": {
     "./_framework/blazor.webassembly.js": "./_framework/blazor.webassembly.w3qd1tpl0e.js",
+    "./_framework/dotnet.js": "./_framework/dotnet.awe3efxh5f.js",
     "./_framework/dotnet.native.js": "./_framework/dotnet.native.bjoj0wmylw.js",
-    "./_framework/dotnet.runtime.js": "./_framework/dotnet.runtime.5nc8i5dl74.js",
-    "./_framework/dotnet.js": "./_framework/dotnet.xecf7ul9cw.js"
+    "./_framework/dotnet.runtime.js": "./_framework/dotnet.runtime.5nc8i5dl74.js"
   },
   "scopes": {},
   "integrity": {
     "./_framework/blazor.webassembly.js": "sha256-lDXsDYFgm62F+YUvxES7IOTCXYpiHpU3uR45YdC6mq4=",
     "./_framework/blazor.webassembly.w3qd1tpl0e.js": "sha256-lDXsDYFgm62F+YUvxES7IOTCXYpiHpU3uR45YdC6mq4=",
-    "./_framework/dotnet.js": "sha256-mRv2iN58+XERAjA2aQ/f0DVd/7SCTf4PAOs9inQt78M=",
+    "./_framework/dotnet.awe3efxh5f.js": "sha256-1tcy4M73MJGF4jglA1R26y3Fir6yFlA/PXv2A8K7ROg=",
+    "./_framework/dotnet.js": "sha256-1tcy4M73MJGF4jglA1R26y3Fir6yFlA/PXv2A8K7ROg=",
     "./_framework/dotnet.native.bjoj0wmylw.js": "sha256-CZ0IVZkLTIvee7n1yVvOitlJWNdj/YjaFgpMgliIM64=",
     "./_framework/dotnet.native.js": "sha256-CZ0IVZkLTIvee7n1yVvOitlJWNdj/YjaFgpMgliIM64=",
     "./_framework/dotnet.runtime.5nc8i5dl74.js": "sha256-/3dBg9sj1yLD3h0PDMHnNUXWs/2zWwIMEzom1Xz3Q40=",
-    "./_framework/dotnet.runtime.js": "sha256-/3dBg9sj1yLD3h0PDMHnNUXWs/2zWwIMEzom1Xz3Q40=",
-    "./_framework/dotnet.xecf7ul9cw.js": "sha256-mRv2iN58+XERAjA2aQ/f0DVd/7SCTf4PAOs9inQt78M="
+    "./_framework/dotnet.runtime.js": "sha256-/3dBg9sj1yLD3h0PDMHnNUXWs/2zWwIMEzom1Xz3Q40="
   }
 }</script>
 </head>
@@ -48,7 +50,17 @@
         <button class="dismiss" aria-label="بستن پیام خطا">×</button>
     </div>
     <script src="js/sitepack.js"></script>
-    <script src="_framework/blazor.webassembly.w3qd1tpl0e.js"></script>
+    <script src="_framework/blazor.webassembly.w3qd1tpl0e.js" autostart="false"></script>
+    <script>
+        Blazor.start().then(() => {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register(new URL('./service-worker.js', document.baseURI), {
+                    scope: new URL('./', document.baseURI).href,
+                    updateViaCache: 'none'
+                }).catch(error => console.warn('ثبت سرویس آفلاین انجام نشد.', error));
+            }
+        });
+    </script>
 </body>
 
 </html>
