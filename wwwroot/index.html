@@ -5,8 +5,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>سایت‌پَک | مدیریت مصالح پروژه</title>
-    <meta name="theme-color" content="#232b2a" />
+    <meta name="theme-color" content="#0284c7" />
     <base href="/" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png" />
     <link rel="preload" id="webassembly" />
     <link rel="preload" href="fonts/Vazirmatn.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="css/app.css" />
@@ -30,7 +32,17 @@
         <button class="dismiss" aria-label="بستن پیام خطا">×</button>
     </div>
     <script src="js/sitepack.js"></script>
-    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js" autostart="false"></script>
+    <script>
+        Blazor.start().then(() => {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register(new URL('./service-worker.js', document.baseURI), {
+                    scope: new URL('./', document.baseURI).href,
+                    updateViaCache: 'none'
+                }).catch(error => console.warn('ثبت سرویس آفلاین انجام نشد.', error));
+            }
+        });
+    </script>
 </body>
 
 </html>

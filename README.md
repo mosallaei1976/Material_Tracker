@@ -5,8 +5,8 @@ It helps site supervisors manage deliveries, record consumption, and monitor
 material stock separately for each project. Data is stored in the browser, without
 a backend or cloud account.
 
-The core data layer, persistence services, and initial UI are implemented. CSV
-export and installable PWA/offline startup support remain planned work.
+The core data layer, persistence services, initial UI, and installable PWA with
+offline startup are implemented. CSV export remains planned work.
 
 ## Features
 
@@ -77,8 +77,20 @@ does not synchronize between browsers, devices, or open tabs. Different origins,
 including different local ports, have separate storage. Use JSON backups to move
 data or recover it.
 
-Data operations work during an already-loaded offline session. Service-worker
-caching and offline application startup are not implemented yet.
+After the first successful load and service-worker installation, the app can
+start offline, including on its page routes. Install it using the browser's install
+action (or Add to Home Screen). Deployment requires HTTPS; localhost also works.
+The manifest and worker use the configured base path, including `/Material_Tracker/`
+on GitHub Pages. Static caches are versioned per deployment and base path; updates
+activate after existing app tabs close. Records remain in localStorage independently
+of those caches. Clearing site data still removes records.
+
+To verify published PWA behavior in headless Edge at both `/` and `/Material_Tracker/`:
+
+```powershell
+dotnet publish -c Release -o tests/artifacts/pwa-publish
+node tests/pwa-checks.cjs <absolute-playwright-module-path>
+```
 
 ## Verification
 
@@ -131,7 +143,6 @@ persistence, and run `dotnet build` after code changes.
 ## Remaining work
 
 - CSV exports with Jalali dates, correct escaping, and spreadsheet formula protection.
-- PWA manifest/assets, service-worker caching, and installed/offline startup verification.
 - Broader browser, accessibility, and physical mobile-device testing.
 
 The bundled Vazirmatn font is accompanied by its [OFL license](wwwroot/fonts/OFL.txt).
